@@ -1,0 +1,10 @@
+# Colors file!
+# Use integers or (R, G, B)
+
+# NPC colors
+player = 0xFFFFFF
+yellow = 0xFFFF00
+
+# Wall colors
+dark_wall = 0x000064
+dark_ground = 0x323296
