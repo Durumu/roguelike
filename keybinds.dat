@@ -1,0 +1,10 @@
+# Keybinds file.
+# Don't edit unless you know what you're doing!
+# ^ = CTRL, ! = Alt, + = Shift
+
+move_right = RIGHT, l
+move_left = LEFT, h
+move_up = UP, k
+move_down = DOWN, j
+toggle_fullscreen = !ENTER, F11
+exit_game = ESCAPE, q
