@@ -125,7 +125,7 @@ class Tile:
         return not self == other
 
 class Map:
-    # ABSTRACT CLASS -- DO NOT IMPLEMENT!!!
+    # Not designed to be directly implemented
     def __init__(self, width, height, con=None):
         self.width = width
         self.height = height
@@ -135,6 +135,8 @@ class Map:
 
         self.x_off = 0
         self.y_off = 0
+
+        self.grid = deque()
 
     def __getitem__(self, index):
         # sorta hacky -- returns the row of Tiles corresponding to
@@ -165,7 +167,7 @@ class Map:
                                    for tile in row]) for row in self.grid])
 
     def at(self, x, y):
-        return self.grid[y][x]
+        return self.grid[y-self.y_off][x-self.x_off]
     def set_con(self,con):
         self.con=con
 
@@ -184,8 +186,8 @@ class WorldMap(Map):
     def __init__(self, width, height, con=None, seed='seed'):
         super().__init__(width,height,con)
 
-        self.elevation_gen = NoiseGenerator(seed[len(seed)//2:], octaves=8,
-                                            persistence=9.0, lacunarity=1.3,
+        self.elevation_gen = NoiseGenerator(seed=seed[len(seed)//2:], octaves=8,
+                                            persistence=3.0, lacunarity=2.0,
                                             repeatx=0x10000,repeaty=0x10000,
                                             exponent=3, div=0x1000)
         self.moisture_gen = NoiseGenerator(seed[:len(seed)//2], octaves=3,
@@ -193,16 +195,18 @@ class WorldMap(Map):
                                            repeatx=0x10000,repeaty=0x10000,
                                            exponent=3, div=0x1000)
 
-        self.grid = deque()
-
         for x in range(self.x_off, self.x_off + width):
             self.grid.append(deque())
             for y in range(self.y_off, self.y_off + height):
-                e = self.elevation_gen.get(x,y)
-                m = self.moisture_gen.get(x,y)
-                biome_id = get_biome(e,m)
-                self.grid[-1].append(Tile(blocked=biome_id==0, elevation=e,
-                                          moisture=m, biome_id=biome_id))
+                self.grid[-1].append(self.create_tile(x,y))
+
+    def create_tile(self, x, y):
+        e = self.elevation_gen.get(x,y)
+        m = self.moisture_gen.get(x,y)
+        biome_id = get_biome(e,m)
+        return Tile(blocked=biome_id==-1, elevation=e,
+                    moisture=m, biome_id=biome_id)
+
 
     def pan(self, dx=0, dy=0):
         if not dx and not dy:
@@ -210,54 +214,40 @@ class WorldMap(Map):
         print('pan {} {}'.format(dx, dy))
         if dx > 0: # going right
             x = self.x_off + self.width - 1
-            for y,row in enumerate(self.grid):
+            y = self.y_off
+            for row in self.grid:
                 row.popleft()
-                y += self.y_off
-                e = self.elevation_gen.get(x,y)
-                m = self.moisture_gen.get(x,y)
-                biome_id = get_biome(e,m)
-                row.append(Tile(blocked=biome_id==0, elevation=e,
-                                moisture=m, biome_id=biome_id))
+                row.append(self.create_tile(x,y))
+                y += 1
             self.x_off += 1
             self.pan(dx=dx-1)
 
         elif dx < 0: # going left
             x = self.x_off
-            for y,row in enumerate(self.grid):
+            y = self.y_off
+            for row in self.grid:
                 row.pop()
-                y += self.y_off
-                e = self.elevation_gen.get(x,y)
-                m = self.moisture_gen.get(x,y)
-                biome_id = get_biome(e,m)
-                row.appendleft(Tile(blocked=biome_id==0, elevation=e,
-                                    moisture=m, biome_id=biome_id))
+                row.appendleft(self.create_tile(x,y))
+                y += 1
             self.x_off -= 1
             self.pan(dx=dx+1)
 
         if dy > 0: # going down
-            self.grid.pop()
-            new_row = deque()
+            self.grid.popleft()
+            self.grid.append(deque())
             y = self.y_off + self.height - 1
             for x in range(self.x_off, self.x_off + self.width):
-                e = self.elevation_gen.get(x,y)
-                m = self.moisture_gen.get(x,y)
-                biome_id = get_biome(e,m)
-                new_row.append(Tile(blocked=biome_id==0, elevation=e,
-                                    moisture=m, biome_id=biome_id))
-            self.grid.appendleft(new_row)
+                self.grid[-1].append(self.create_tile(x,y))
+
             self.y_off += 1
             self.pan(dy=dy-1)
 
         elif dy < 0: # going up
-            self.grid.popleft()
-            new_row = deque()
+            self.grid.pop()
+            self.grid.appendleft(deque())
             y = self.y_off - 1
             for x in range(self.x_off, self.x_off + self.width):
-                e = self.elevation_gen.get(x,y)
-                m = self.moisture_gen.get(x,y)
-                biome_id = get_biome(e,m)
-                new_row.append(Tile(blocked=biome_id==0, elevation=e,
-                                    moisture=m, biome_id=biome_id))
-            self.grid.append(new_row)
+                self.grid[0].append(self.create_tile(x,y))
+
             self.y_off -= 1
             self.pan(dy=dy+1)
