@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 import tdl
-import math
-import random
+import heapq
+
 import mapgen
 from data import colors, keybinds
 
@@ -15,7 +15,7 @@ SCREEN_WIDTH = 80
 SCREEN_HEIGHT = 50
 
 # size of actual drawn area
-DRAWN_WIDTH = 59
+DRAWN_WIDTH = 60
 DRAWN_HEIGHT = 45
 
 # center of the drawn area (where player generally will sit)
@@ -47,7 +47,7 @@ class VisibleObject:
             self.y += dy
             advance()
 
-        print(self.x, self.y, self.map.at(self.x, self.y))
+        #print(self.x, self.y, self.map.at(self.x, self.y))
 
     def clear(self):
         if self.map is current_map:
@@ -90,9 +90,9 @@ class Camera:
 
         assert target, 'snap() called without a target for camera'
 
-        if CENTER_X <= target.x and target.x < target.map.width - CENTER_X:
+        if CENTER_X <= target.x and target.x <= target.map.width - DRAWN_WIDTH + CENTER_X:
             self.x = target.x - CENTER_X
-        if CENTER_Y <= target.y and target.y < target.map.height - CENTER_Y:
+        if CENTER_Y <= target.y and target.y <= target.map.height - DRAWN_HEIGHT + CENTER_Y:
             self.y = target.y - CENTER_Y
 
 ###############################################################################
@@ -114,12 +114,13 @@ def advance():
 #       Pre-Handling Initialization                                           #
 ###############################################################################
 
-current_map = mapgen.Map(100,100,seed='asdf',type=None)
+current_map = mapgen.Map(100,100,seed='test',type='main')
 print(current_map)
 
 player = Player(1, 1, current_map,'@',colors['player'])
 camera = Camera(following=player)
-objects = [player]
+
+current_map.add_object(player)
 
 ###############################################################################
 #       Event Handling                                                        #
@@ -143,7 +144,7 @@ key_events = {
 }
 
 
-def handle_keys():
+def handle_key_events():
     user_input = tdl.event.key_wait()
 
     # modifier is 3 bits, based on keys currently held down
@@ -178,18 +179,14 @@ turn_number = 0
 
 while not tdl.event.is_window_closed():
     #draw all objects
-
     current_map.draw()
-    for obj in objects:
-        obj.draw()
 
-    root.blit(con, srcX=camera.x, srcY=camera.y,
+    root.blit(current_map.con, srcX=camera.x, srcY=camera.y,
               width=DRAWN_WIDTH, height=DRAWN_HEIGHT)
 
     tdl.flush()
 
     #clear all objects before the next movement
-    for obj in objects:
-        obj.clear()
+    current_map.clear()
 
-    handle_keys()
+    handle_key_events()

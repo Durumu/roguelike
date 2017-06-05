@@ -4,14 +4,16 @@ The purpose of this module is to import and store all of the data from
 the external data files in one organized place for all modules in the project.
 """
 
+from collections import defaultdict
+
 ###############################################################################
 #       Initialization                                                        #
 ###############################################################################
 
-
 # names of data files
 COLOR_DATA_FILE = 'colors.dat'
 KEYBIND_DATA_FILE = 'keybinds.dat'
+DELTAS_DATA_FILE = 'deltas.dat'
 
 colors = {}
 try:
@@ -48,3 +50,5 @@ try:
                     keybinds[modifier][binding.strip()] = event_name
 except:
     print('Error reading in keybinds.')
+
+deltas = defaultdict(dict)
