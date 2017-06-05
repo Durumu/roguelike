@@ -2,10 +2,11 @@
 
 import tdl
 import random
-from noise import pnoise2
+from tdl import noise
 from math import sin, cos
-from collections import deque
+from collections import deque, namedtuple
 
+import data
 from data import colors
 
 ###############################################################################
@@ -70,63 +71,13 @@ def get_biome(e,m):
 #       Classes                                                               #
 ###############################################################################
 
-class NoiseGenerator():
-    def __init__(self, seed=0, octaves=1, persistence=0.5, lacunarity=2.0,
-                 repeatx=1024, repeaty=1024, exponent=1, div=1024):
-        self.seed = seed
-        self.octaves = octaves
-        self.persistence = persistence
-        self.lacunarity = lacunarity
-        self.repeatx = repeatx
-        self.repeaty = repeaty
-        self.exponent = exponent
-        #factor to divide initial values by
-        self.div = div
-
-    def get(self,x,y):
-        e = pnoise2(x/self.div, y/self.div,
-                    octaves=self.octaves,
-                    persistence=self.persistence,
-                    lacunarity=self.lacunarity,
-                    repeatx=self.repeatx,
-                    repeaty=self.repeaty)
-        return  ((e+1)/2) ** self.exponent
-
-
-class Tile:
-    def __init__(self, blocked=False, block_sight=False,
-                 elevation=0.5, moisture=0.5, biome_id=0):
-        self.blocked = blocked
-
-        #by default, blocked tiles block sight, clear ones don't
-        if block_sight is None:
-            block_sight = blocked
-        self.block_sight = block_sight
-
-        self.elevation = elevation
-        self.moisture = moisture
-        self.biome_id = biome_id
-
-    def __bool__(self):
-        return self.block_sight
-
-    def __repr__(self):
-        return 'Tile({}, {}, {}, {}, {})'.format(self.blocked, self.block_sight,
-                                                 self.elevation, self.moisture,
-                                                 self.biome_id)
-    def __str__(self):
-        return repr(self)
-
-    def __eq__(self, other):
-        if type(other) is not Tile:
-            return False
-        return self.id == other.id
-    def __ne__(self, other):
-        return not self == other
+Tile = namedtuple('Tile', ['x', 'y', 'blocked', 'block_sight', 'elevation',
+                           'moisture', 'biome_id'])
 
 class Map:
     # Not designed to be directly implemented
-    def __init__(self, width, height, con=None):
+    def __init__(self, name, width, height, con=None):
+        self.name = name
         self.width = width
         self.height = height
 
@@ -136,12 +87,19 @@ class Map:
         self.x_off = 0
         self.y_off = 0
 
-        self.grid = deque()
+        self._tiles = data.load_tiles(self)
+        self._grid = deque()
 
-    def __getitem__(self, index):
-        # sorta hacky -- returns the row of Tiles corresponding to
-        # the given index
-        return self.grid[index]
+    @property
+    def grid(self):
+        return self._grid
+
+    @property
+    def tiles(self):
+        return self._tiles
+
+    def dump(self):
+        data.dump(self.tiles,data.TILE_DATA_FILE.format(self.name))
 
     def draw(self):
         assert self.con is not None, 'There must be a console to draw to!'
@@ -163,7 +121,7 @@ class Map:
             object.clear()
 
     def __str__(self):
-        return '\n'.join([' '.join(['%.2f'%tile.elevation
+        return '\n'.join([' '.join(['%.2f' % tile.elevation
                                    for tile in row]) for row in self.grid])
 
     def at(self, x, y):
@@ -183,40 +141,44 @@ class Map:
         return object in self.objects
 
 class WorldMap(Map):
-    def __init__(self, width, height, con=None, seed='seed'):
-        super().__init__(width,height,con)
-
-        self.elevation_gen = NoiseGenerator(seed=seed[len(seed)//2:], octaves=8,
-                                            persistence=3.0, lacunarity=2.0,
-                                            repeatx=0x10000,repeaty=0x10000,
-                                            exponent=3, div=0x1000)
-        self.moisture_gen = NoiseGenerator(seed[:len(seed)//2], octaves=3,
-                                           persistence=0.5, lacunarity=2.0,
-                                           repeatx=0x10000,repeaty=0x10000,
-                                           exponent=3, div=0x1000)
+    def __init__(self, name, width, height, con=None, seed='seed'):
+        super().__init__(name, width, height, con)
+        seed = abs(hash(seed))
+        self.elevation_gen = noise.Noise(mode='TURBULENCE', lacunarity=3.0,
+                                         hurst=0.2, octaves=8, seed=seed)
+        self.moisture_gen = noise.Noise(mode='TURBULENCE', lacunarity=3.0,
+                                        hurst=0.2, octaves=8, seed=seed//2)
 
         for x in range(self.x_off, self.x_off + width):
             self.grid.append(deque())
             for y in range(self.y_off, self.y_off + height):
-                self.grid[-1].append(self.create_tile(x,y))
+                self.tiles[x,y] = self.create_tile(x,y)
+                self.grid[-1].append(self.tiles[x,y])
 
     def create_tile(self, x, y):
-        e = self.elevation_gen.get(x,y)
-        m = self.moisture_gen.get(x,y)
+        # check if this tile has already been created
+        if (x,y) in self.tiles:
+            return self.tiles[x,y]
+
+        # if not, generate and return the tile
+        e = self.elevation_gen.get_point(x/1024,y/1024)
+        m = self.moisture_gen.get_point(x/1024,y/1024)
         biome_id = get_biome(e,m)
-        return Tile(blocked=biome_id==-1, elevation=e,
-                    moisture=m, biome_id=biome_id)
+        return Tile(x=x, y=y, blocked=biome_id==-1, block_sight=False,
+                    elevation=e, moisture=m, biome_id=biome_id)
 
 
     def pan(self, dx=0, dy=0):
         if not dx and not dy:
             return
-        print('pan {} {}'.format(dx, dy))
         if dx > 0: # going right
             x = self.x_off + self.width - 1
             y = self.y_off
             for row in self.grid:
-                row.popleft()
+                # remove the furthest left tile from each row and add to tiles
+                tile = row.popleft()
+                self.tiles[tile.x,tile.y] = tile
+                # add a new tile to the far right of each row
                 row.append(self.create_tile(x,y))
                 y += 1
             self.x_off += 1
@@ -226,14 +188,20 @@ class WorldMap(Map):
             x = self.x_off
             y = self.y_off
             for row in self.grid:
-                row.pop()
+                # remove the furthest right tile from each row and add to tiles
+                tile = row.pop()
+                self.tiles[tile.x,tile.y] = tile
+                # add a new tile to the far left of each row
                 row.appendleft(self.create_tile(x,y))
                 y += 1
             self.x_off -= 1
             self.pan(dx=dx+1)
 
         if dy > 0: # going down
-            self.grid.popleft()
+            # remove the entire top row and add each tile to tiles
+            for tile in self.grid.popleft():
+                self.tiles[tile.x,tile.y] = tile
+            # create a new row and append it to the bottom
             self.grid.append(deque())
             y = self.y_off + self.height - 1
             for x in range(self.x_off, self.x_off + self.width):
@@ -243,7 +211,10 @@ class WorldMap(Map):
             self.pan(dy=dy-1)
 
         elif dy < 0: # going up
-            self.grid.pop()
+            # remove the entire bottom row and add each tile to tiles
+            for tile in self.grid.pop():
+                self.tiles[tile.x,tile.y] = tile
+            # create a new row and append it to the bottom
             self.grid.appendleft(deque())
             y = self.y_off - 1
             for x in range(self.x_off, self.x_off + self.width):

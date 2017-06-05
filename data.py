@@ -5,6 +5,28 @@ the external data files in one organized place for all modules in the project.
 """
 
 from collections import defaultdict
+import pickle
+import os
+
+import mapgen
+
+###############################################################################
+#       Functions                                                             #
+###############################################################################
+
+def dump(obj, file_name):
+    with open(file_name, 'wb') as f:
+        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+
+def load(file_name):
+    with open(file_name, 'rb') as f:
+        return pickle.load(f)
+
+def load_tiles(map_):
+    file_name = TILE_DATA_FILE.format(map_.name)
+    if os.path.isfile(file_name):
+        return load(file_name)
+    return {}
 
 ###############################################################################
 #       Initialization                                                        #
@@ -13,7 +35,7 @@ from collections import defaultdict
 # names of data files
 COLOR_DATA_FILE = 'colors.dat'
 KEYBIND_DATA_FILE = 'keybinds.dat'
-DELTAS_DATA_FILE = 'deltas.dat'
+TILE_DATA_FILE = '{}_tiles.pickle'
 
 colors = {}
 try:
@@ -25,9 +47,8 @@ try:
                 color_value = int(color_value.strip(),16)
                 colors[color_name] = color_value
 except ValueError:
-    print('')
+    print('Value error')
     # this functionality doesn't work yet obviously lol
-
 
 keybinds = [{} for _ in range(8)]
 try:
@@ -52,5 +73,3 @@ try:
                     keybinds[modifier][binding.strip()] = event_name
 except:
     print('Error reading in keybinds.')
-
-deltas = defaultdict(dict)

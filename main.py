@@ -15,8 +15,8 @@ SCREEN_WIDTH = 80
 SCREEN_HEIGHT = 50
 
 # size of actual drawn area
-DRAWN_WIDTH = 10
-DRAWN_HEIGHT = 10
+DRAWN_WIDTH = 60
+DRAWN_HEIGHT = 45
 
 # center of the drawn area (where player generally will sit)
 CENTER_X = DRAWN_WIDTH // 2
@@ -57,10 +57,12 @@ class VisibleObject:
         return (self.move_x(dx) | self.move_y(dy))
 
     def clear(self):
-        self.map.con.draw_char(self.x, self.y, ' ', bg=None)
+        self.map.con.draw_char(self.x-self.map.x_off, self.y-self.map.y_off,
+                               ' ', bg=None)
 
     def draw(self):
-        self.map.con.draw_char(self.x, self.y, self.char, bg=None, fg=self.color)
+        self.map.con.draw_char(self.x-self.map.x_off, self.y-self.map.y_off,
+                               self.char, bg=None, fg=self.color)
 
 class Player(VisibleObject):
     def move(self, dx, dy):
@@ -83,6 +85,7 @@ class Player(VisibleObject):
 ###############################################################################
 
 def exit_game():
+    current_map.dump()
     exit()
 
 def toggle_fullscreen():
@@ -97,7 +100,8 @@ def advance(delta=1):
 #       Pre-Handling Initialization                                           #
 ###############################################################################
 
-current_map = mapgen.WorldMap(DRAWN_HEIGHT*2, DRAWN_WIDTH*2, seed='test')
+current_map = mapgen.WorldMap('main', DRAWN_HEIGHT*3, DRAWN_WIDTH*3,
+                              seed='test')
 #print(current_map)
 
 spawn_x, spawn_y = (CENTER_X, CENTER_Y)
