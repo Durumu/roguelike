@@ -37,17 +37,23 @@ class VisibleObject:
         self.color = color
         self.map = map
 
-    def move(self, dx, dy):
+    def move_x(self, dx):
         if (dx and 0 <= self.x+dx and self.x+dx < self.map.width and
                 not self.map.at(self.x+dx, self.y).blocked):
             self.x += dx
-            advance()
+            return True
+        return False
+
+    def move_y(self, dy):
         if (dy and 0 <= self.y+dy and self.y+dy < self.map.height and
                 not self.map.at(self.x, self.y+dy).blocked):
             self.y += dy
-            advance()
+            return True
+        return False
 
-        #print(self.x, self.y, self.map.at(self.x, self.y))
+    def move(self, dx, dy):
+        self.move_x(dx)
+        self.move_y(dy)
 
     def clear(self):
         if self.map is current_map:
@@ -59,8 +65,18 @@ class VisibleObject:
 
 class Player(VisibleObject):
     def move(self, dx, dy):
-        super().move(dx, dy)
-        camera.snap()
+        if dx:
+            if super().move_x(dx):
+                self.map.pan(dx=dx)
+                advance(abs(dx))
+        if dy:
+            if super().move_y(dy):
+                self.map.pan(dy=dy)
+                advance(abs(dy))
+
+        print(self.x, self.y, self.map.at(self.x, self.y))
+        self.map.pan()
+        #print(self.map)
 
     def attempt_to_move(self, dx, dy):
         self.move(dx, dy)
@@ -85,6 +101,8 @@ class Camera:
             self.y = y
 
     def snap(self,target=None):
+        start_x, start_y = self.x, self.y
+
         if target is None:
             target = self.following
 
@@ -94,6 +112,8 @@ class Camera:
             self.x = target.x - CENTER_X
         if CENTER_Y <= target.y and target.y <= target.map.height - DRAWN_HEIGHT + CENTER_Y:
             self.y = target.y - CENTER_Y
+
+        return (self.x-start_x, self.y-start_y)
 
 ###############################################################################
 #       Functions                                                                   #
@@ -105,19 +125,20 @@ def exit_game():
 def toggle_fullscreen():
     tdl.set_fullscreen(not tdl.get_fullscreen())
 
-def advance():
+def advance(delta=1):
     global turn_number
     # a turn has been taken successfully
-    turn_number += 1
+    turn_number += delta
 
 ###############################################################################
 #       Pre-Handling Initialization                                           #
 ###############################################################################
 
-current_map = mapgen.Map(100,100,seed='test',type='main')
-print(current_map)
+current_map = mapgen.WorldMap(DRAWN_HEIGHT*2, DRAWN_WIDTH*2, seed='test')
+#print(current_map)
 
-player = Player(1, 1, current_map,'@',colors['player'])
+spawn_x, spawn_y = (50, 50)
+player = Player(spawn_x, spawn_y, current_map, '@', colors['player'])
 camera = Camera(following=player)
 
 current_map.add_object(player)
@@ -173,7 +194,7 @@ tdl.setFPS(FPS_LIMIT)
 root = tdl.init(SCREEN_WIDTH, SCREEN_HEIGHT,
                 title="Roguelike", fullscreen=False)
 con = tdl.Console(current_map.width,current_map.height)
-current_map.con = con
+current_map.set_con(con)
 
 turn_number = 0
 
@@ -181,7 +202,11 @@ while not tdl.event.is_window_closed():
     #draw all objects
     current_map.draw()
 
-    root.blit(current_map.con, srcX=camera.x, srcY=camera.y,
+    camera_x = spawn_x + current_map.x_off - CENTER_X
+    camera_y = spawn_y + current_map.y_off - CENTER_Y
+    print(camera_x,current_map.x_off)
+    print(camera_y,current_map.y_off)
+    root.blit(current_map.con, srcX=camera_x, srcY=camera_y,
               width=DRAWN_WIDTH, height=DRAWN_HEIGHT)
 
     tdl.flush()

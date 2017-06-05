@@ -1,5 +1,5 @@
-# Colors file!
-# Use integers or (R, G, B)
+# Colors file
+# Use base 16 integers
 
 # NPC colors
 player = 0xFFFFFF

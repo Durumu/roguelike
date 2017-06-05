@@ -18,22 +18,24 @@ DELTAS_DATA_FILE = 'deltas.dat'
 colors = {}
 try:
     with open(COLOR_DATA_FILE) as f:
-        for l in f:
-            if l[0] not in '#\n':
-                color_name, color_value = l.split('=')
+        for line in f:
+            if line[0] not in '#\n':
+                color_name, color_value = line.split('=')
                 color_name = color_name.strip()
                 color_value = int(color_value.strip(),16)
                 colors[color_name] = color_value
-except:
-    raise IOError('Error reading in colors.')
+except ValueError:
+    print('')
+    # this functionality doesn't work yet obviously lol
+
 
 keybinds = [{} for _ in range(8)]
 try:
     with open(KEYBIND_DATA_FILE) as f:
-        for l in f:
-            if l[0] not in '#\n':
-                event_name = l.split('=')[0].strip()
-                keybind_values = l.split('=')[1]
+        for line in f:
+            if line[0] not in '#\n':
+                event_name = line.split('=')[0].strip()
+                keybind_values = line.split('=')[1]
                 for binding in keybind_values.split(','):
                     modifier = 0
                     prefix = binding[:3]
